@@ -1,1 +1,257 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบข้อมูลน้ำท่วมเมืองน่าน (Mobile)</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --blue: #3498db;
+            --sidebar-w: 340px;
+        }
 
+        body { font-family: 'Sarabun', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #f4f7f6; }
+
+        /* Navigation - ปรับให้เลื่อนแนวนอนได้บนมือถือ */
+        nav { 
+            background: var(--primary); 
+            display: flex; 
+            overflow-x: auto; 
+            white-space: nowrap; 
+            z-index: 1000; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            -webkit-overflow-scrolling: touch;
+        }
+        nav::-webkit-scrollbar { display: none; } /* ซ่อนแถบเลื่อน */
+        
+        .nav-link { 
+            padding: 15px 20px; 
+            color: white; 
+            text-decoration: none; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border-bottom: 4px solid transparent;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+        .nav-link.active { border-bottom: 4px solid var(--accent); background: rgba(255,255,255,0.1); }
+
+        .page-content { display: none; flex-grow: 1; height: calc(100vh - 54px); flex-direction: row; }
+        .page-content.active { display: flex; }
+
+        /* Sidebar - ปรับเป็น Responsive */
+        .sidebar { 
+            width: var(--sidebar-w); 
+            background: var(--primary); 
+            color: white; 
+            padding: 15px; 
+            box-sizing: border-box; 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            z-index: 10;
+        }
+
+        /* Responsive Logic */
+        @media (max-width: 768px) {
+            .page-content { flex-direction: column-reverse; } /* เอาแผนที่ไว้บน ปุ่มไว้ล่าง */
+            .sidebar { 
+                width: 100%; 
+                height: 40vh; /* ให้ปุ่มกินพื้นที่ 40% ของจอ */
+                box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
+            }
+            .main-view { height: 60vh; }
+            .btn-grid { grid-template-columns: 1fr 1fr 1fr; } /* มือถือใช้ 3 คอลัมน์ให้ประหยัดพื้นที่แนวตั้ง */
+        }
+
+        .control-group { margin-bottom: 15px; }
+        .label { display: block; margin-bottom: 8px; color: var(--blue); font-weight: bold; font-size: 0.85rem; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .btn { 
+            background: #34495e; 
+            border: 1px solid #555; 
+            color: #ccc; 
+            padding: 10px 5px; /* ปุ่มใหญ่ขึ้นให้กดง่าย */
+            cursor: pointer; 
+            border-radius: 4px; 
+            font-size: 0.75rem; 
+        }
+        .btn.active { background: var(--accent); color: white; border-color: white; font-weight: bold; }
+
+        .main-view { flex-grow: 1; position: relative; background: #000; }
+        .leaflet-map-container { width: 100%; height: 100%; }
+
+        /* Video Player */
+        .video-container { width: 95%; max-width: 1200px; border: 2px solid white; border-radius: 8px; overflow: hidden; }
+        video { width: 100%; display: block; }
+
+        .map-info { 
+            position: absolute; 
+            top: 10px; /* ย้ายมาไว้ข้างบนบนมือถือจะได้ไม่โดนนิ้วบัง */
+            right: 10px; 
+            background: rgba(0,0,0,0.7); 
+            color: white; 
+            padding: 5px 10px; 
+            border-radius: 4px; 
+            font-size: 0.7rem; 
+            z-index: 1000; 
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-link active" onclick="showPage('page1')">1. จำลองพายุ</div>
+        <div class="nav-link" onclick="showPage('page2')">2. ความเสี่ยง</div>
+        <div class="nav-link" onclick="showPage('page3')">3. N.1 Scenario</div>
+        <div class="nav-link">4. หลักระดับน้ำ</div>
+        <div class="nav-link">5. ข้อมูลสำรวจ</div>
+    </nav>
+
+    <section id="page1" class="page-content active">
+        <div class="main-view" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #1a1a1a;">
+            <div class="video-container">
+                <video controls autoplay loop muted playsinline>
+                    <source src="Sim_Flood_Nan_All.mp4" type="video/mp4">
+                </video>
+            </div>
+            <p style="color: white; font-size: 0.8rem; margin-top: 15px; text-align: center; padding: 0 20px;">
+                พายุวิภา ปี 2568 (Simulation)
+            </p>
+        </div>
+    </section>
+
+    <section id="page2" class="page-content">
+        <aside class="sidebar">
+            <div class="control-group">
+                <span class="label">🗓️ คาบปี (Return Period)</span>
+                <div class="btn-grid">
+                    <button class="btn active" onclick="updateMap2('rp', '010', this)">10Y</button>
+                    <button class="btn" onclick="updateMap2('rp', '025', this)">25Y</button>
+                    <button class="btn" onclick="updateMap2('rp', '050', this)">50Y</button>
+                    <button class="btn" onclick="updateMap2('rp', '100', this)">100Y</button>
+                    <button class="btn" onclick="updateMap2('rp', '200', this)">200Y</button>
+                    <button class="btn" onclick="updateMap2('rp', '500', this)">500Y</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <span class="label">📏 ความลึก (Depth)</span>
+                <div class="btn-grid">
+                    <button class="btn active" onclick="updateMap2('depth', '030', this)">0.3m</button>
+                    <button class="btn" onclick="updateMap2('depth', '050', this)">0.5m</button>
+                    <button class="btn" onclick="updateMap2('depth', '100', this)">1.0m</button>
+                    <button class="btn" onclick="updateMap2('depth', '150', this)">1.5m</button>
+                    <button class="btn" onclick="updateMap2('depth', '300', this)">3.0m</button>
+                    <button class="btn" onclick="updateMap2('depth', '500', this)">5.0m</button>
+                </div>
+            </div>
+        </aside>
+        <div class="main-view">
+            <div id="leaflet-map-p2" class="leaflet-map-container"></div>
+            <div class="map-info" id="map-status-p2">TR_010y.png</div>
+        </div>
+    </section>
+
+    <section id="page3" class="page-content">
+        <aside class="sidebar">
+            <div class="control-group">
+                <span class="label">📏 สูงล้นคัน (เมตร)</span>
+                <div class="btn-grid">
+                    <button class="btn active" onclick="updateMap3('h', '010', this)">0.10</button>
+                    <button class="btn" onclick="updateMap3('h', '025', this)">0.25</button>
+                    <button class="btn" onclick="updateMap3('h', '050', this)">0.50</button>
+                    <button class="btn" onclick="updateMap3('h', '075', this)">0.75</button>
+                    <button class="btn" onclick="updateMap3('h', '100', this)">1.00</button>
+                    <button class="btn" onclick="updateMap3('h', '125', this)">1.25</button>
+                    <button class="btn" onclick="updateMap3('h', '150', this)">1.50</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <span class="label">⏱️ ระยะเวลา (ชั่วโมง)</span>
+                <div class="btn-grid">
+                    <button class="btn active" onclick="updateMap3('t', '1', this)">1h</button>
+                    <button class="btn" onclick="updateMap3('t', '5', this)">5h</button>
+                    <button class="btn" onclick="updateMap3('t', '10', this)">10h</button>
+                    <button class="btn" onclick="updateMap3('t', '15', this)">15h</button>
+                    <button class="btn" onclick="updateMap3('t', '20', this)">20h</button>
+                    <button class="btn" onclick="updateMap3('t', '30', this)">30h</button>
+                    <button class="btn" onclick="updateMap3('t', '40', this)">40h</button>
+                </div>
+            </div>
+        </aside>
+        <div class="main-view">
+            <div id="leaflet-map-p3" class="leaflet-map-container"></div>
+            <div class="map-info" id="map-status-p3">N1_H010_T1.png</div>
+        </div>
+    </section>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        var imageBounds = [[18.74969577, 100.7501915], [18.81643900, 100.8059337]];
+
+        function getBaseLayers() {
+            return {
+                "ถนน": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                "ดาวเทียม": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}')
+            };
+        }
+
+        // Setup Map 2
+        var b2 = getBaseLayers();
+        var map2 = L.map('leaflet-map-p2', { layers: [b2["ดาวเทียม"]] }).setView([18.783, 100.775], 14);
+        L.control.layers(b2).addTo(map2);
+
+        // Setup Map 3
+        var b3 = getBaseLayers();
+        var map3 = L.map('leaflet-map-p3', { layers: [b3["ดาวเทียม"]] }).setView([18.783, 100.775], 14);
+        L.control.layers(b3).addTo(map3);
+
+        var ov2 = null, ov3 = null;
+        var p2RP = "010", p2D = "030";
+        var p3H = "010", p3T = "1";
+
+        function updateMap2(type, val, btn) {
+            if(btn) {
+                btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            if(type==='rp') p2RP = val; else p2D = val;
+            let f = type==='rp' ? `TR_${p2RP}y.png` : `Prob_${p2D}m.png`;
+            if(ov2) map2.removeLayer(ov2);
+            ov2 = L.imageOverlay(f, imageBounds, {opacity: 0.7}).addTo(map2);
+            document.getElementById('map-status-p2').innerText = f;
+        }
+
+        function updateMap3(type, val, btn) {
+            if(btn) {
+                btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            if(type==='h') p3H = val; else p3T = val;
+            let f = `N1_H${p3H}_T${p3T}.png`;
+            if(ov3) map3.removeLayer(ov3);
+            ov3 = L.imageOverlay(f, imageBounds, {opacity: 0.7}).addTo(map3);
+            document.getElementById('map-status-p3').innerText = f;
+        }
+
+        function showPage(id) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.target.classList.add('active');
+            if(id === 'page2') setTimeout(()=>map2.invalidateSize(), 300);
+            if(id === 'page3') setTimeout(()=>map3.invalidateSize(), 300);
+        }
+
+        // Init
+        updateMap2('rp', '010');
+        updateMap3('h', '010');
+    </script>
+</body>
+</html>
