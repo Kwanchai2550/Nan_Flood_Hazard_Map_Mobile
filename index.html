@@ -212,12 +212,12 @@
 
         // Setup Map 2
         var b2 = getBaseLayers();
-        var map2 = L.map('leaflet-map-p2', { layers: [b2["ดาวเทียม (Google)"]] }).setView([18.783, 100.775], 15);
+        var map2 = L.map('leaflet-map-p2', { layers: [b2["ดาวเทียม (Google)"]] }).setView([18.783, 100.775], 14);
         L.control.layers(b2).addTo(map2);
 
         // Setup Map 3
         var b3 = getBaseLayers();
-        var map3 = L.map('leaflet-map-p3', { layers: [b3["ดาวเทียม (Google)"]] }).setView([18.783, 100.775], 15);
+        var map3 = L.map('leaflet-map-p3', { layers: [b3["ดาวเทียม (Google)"]] }).setView([18.783, 100.775], 14);
         L.control.layers(b3).addTo(map3);
 
         var ov2 = null, ov3 = null;
